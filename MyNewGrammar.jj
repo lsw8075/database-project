@@ -1,222 +1,1011 @@
 options
 {
-  static = true;
-  DEBUG_PARSER = false;
-  IGNORE_CASE = true;
+	static = false;
+	DEBUG_PARSER = false;
+	IGNORE_CASE = true;
+	FORCE_LA_CHECK = true;
+	LOOKAHEAD= 2;
 }
 
 PARSER_BEGIN(SimpleDBMSParser)
+import com.sleepycat.je.Database;
+import com.sleepycat.je.DatabaseException;
+import com.sleepycat.je.DatabaseConfig;
+import com.sleepycat.je.Environment;
+import com.sleepycat.je.EnvironmentConfig;
+import java.io.File;
+
+import java.util.ArrayList;
 
 public class SimpleDBMSParser
 {
-  public static final int PRINT_SYNTAX_ERROR = 0;
-  public static final int PRINT_CREATE_TABLE = 1;
-  
-  public static void main(String args[]) throws ParseException
-  {
-    SimpleDBMSParser parser = new SimpleDBMSParser(System.in);
-    System.out.print("DB_2019-12345> ");
+	// TODO : jj lexical state : space in quote
+	public static void main(String args []) throws ParseException
+	{
+		// init
+		Environment myDbEnvironment = null;
+		Database db = null;
+		EnvironmentConfig envConfig = new EnvironmentConfig();
+		envConfig.setAllowCreate(true);
+		myDbEnvironment = new Environment(new File("db/"), envConfig);
+		DatabaseConfig dbConfig = new DatabaseConfig();
+		dbConfig.setAllowCreate(true);
+		dbConfig.setSortedDuplicates(true);
+		dbConfig.setDeferredWrite(true);
+		db = myDbEnvironment.openDatabase(null, "sampleDatabase", dbConfig);
+		SimpleDBMSParser parser = new SimpleDBMSParser(System.in);
 
-    while (true)
-    {
-      try
-      {
-        parser.command();
-      }
-      catch (Exception e)
-      {
-        printMessage(PRINT_SYNTAX_ERROR);
-        SimpleDBMSParser.ReInit(System.in);
-      }
-    }
-  }
-
-  public static void printMessage(int q)
-  {
-    switch(q)
-    {
-      case PRINT_SYNTAX_ERROR:
-      	System.out.println("Syntax error");
-      	break;
-      case PRINT_CREATE_TABLE:
-      	System.out.println("\'CREATE TABLE\' requested");
-      	break;
-    }
-    System.out.print("DB_2019-12345> ");
-  }
+		DBProcessor dbp = new DBProcessor(db);
+		System.out.print("DB_2016-12817> ");
+		
+		ArrayList < Query > ql;
+		String s;
+		while (true)
+		{
+			try
+			{
+				ql = parser.command();
+				if (ql == null) break;
+				
+				if (dbp.processQuery(ql))
+					parser.ReInit(System.in);
+			}
+			catch (Exception e)
+			{
+				//e.printStackTrace();
+				System.out.println("Syntax error");
+				e.printStackTrace();
+				parser.ReInit(System.in);
+			}
+			System.out.print("DB_2016-12817> ");
+		}
+		if (db != null) db.close();
+		if (myDbEnvironment != null) myDbEnvironment.close();
+	}
 }
 
 PARSER_END(SimpleDBMSParser)
 
-SKIP : { " " | "\r" | "\t" | "\n" }
+SKIP :
+{
+	" "
+| "\r"
+| "\t"
+| "\n"
+}
 
 TOKEN : /* Keywords */
 {
-  < EXIT : "exit" >
+	< CREATE : "create" >
+| < TABLE : "table" >
+| < PRIMARY : "primary" >
+| < FOREIGN : "foreign" >
+| < KEY : "key" >
+| < REFERENCES : "references" >
+| < DROP : "drop" >
+| < INSERT : "insert" >
+| < INTO : "into" >
+| < DELETE : "delete" >
+| < FROM : "from" >
+| < SHOW : "show" >
+| < TABLES : "tables" >
+| < EXIT : "exit" >
 | < INT : "int" >
 | < CHAR : "char" >
 | < DATE : "date" >
-| < CREATE_TABLE : "create table" >
-| < NOT_NULL : "not null" >
-| < PRIMARY_KEY : "primary key" >
-| < FOREIGN_KEY : "foreign key" >
-| < REFERENCES : "references" >
+| < DESC : "desc" >
+| < SELECT : "select" >
+| < AS : "as" >
+| < WHERE : "where" >
+| < OR : "or" >
+| < AND : "and" >
+| < NOT : "not" >
+| < NULL : "null" >
+| < IS : "is" >
+| < VALUES : "values" >
 }
 
 TOKEN :
 {
-  < SEMICOLON : ";" >
+	< SEMICOLON : ";" >
 | < LEFT_PAREN : "(" >
 | < RIGHT_PAREN : ")" >
 | < COMMA : "," >
 | < UNDERSCORE : "_" >
-| < INT_VALUE : (< SIGN >)? (< DIGIT >)+>
-| < SIGN : "+" | "-" >
+| < INT_VALUE : (< SIGN >)? (< DIGIT >)+ >
+| < SIGN :
+		"+"
+	| "-" >
 | < DIGIT : [ "0"-"9" ] >
-| < LEGAL_IDENTIFIER : < ALPHABET > (< ALPHABET > | < UNDERSCORE >)* >
+| < LEGAL_IDENTIFIER :
+		< ALPHABET >
+		(
+			< ALPHABET >
+		| < UNDERSCORE >
+		)* >
 | < ALPHABET : [ "a"-"z", "A"-"Z" ] >
+| < WILDCARD : "*" >
+| < PERIOD : "." >
+| < COMP_OP :
+		"<"
+	| ">"
+	| "="
+	| ">="
+	| "<="
+	| "!=" >
+| < DATE_VALUE : < NNNN > "-" < NN > "-" < NN > >
+| < NNNN : < DIGIT > < DIGIT > < DIGIT > < DIGIT > >
+| < NN : < DIGIT > < DIGIT > >
+| < NON_QUOTE_CHARACTER :
+		< DIGIT >
+	| < ALPHABET >
+	| < NON_QUOTE_SPECIAL_CHARACTERS >
+	| " " >
+| < QUOTE : "\'" >
+| < NON_QUOTE_SPECIAL_CHARACTERS :
+		"`"
+	| "~"
+	| "!"
+	| "@"
+	| "#"
+	| "$"
+	| "%"
+	| "^"
+	| "&"
+	| "*"
+	| "("
+	| ")"
+	| "_"
+	| "+"
+	| "-"
+	| "="
+	| "{"
+	| "}"
+	| "["
+	| "]"
+	| "|"
+	| "\\"
+	| ":"
+	| ";"
+	| "<"
+	| ","
+	| ">"
+	| "."
+	| "?"
+	| "/" >
+| < CHAR_STRING : < QUOTE > (< NON_QUOTE_CHARACTER >)* < QUOTE > >
 }
 
-void command() :
+// below are all the non-terminals for parsing.
+ArrayList < Query > command() :
+{
+	ArrayList < Query > ql;
+}
+{
+	(
+		(
+			ql = queryList()
+		)
+		{
+			return ql;
+		}
+	| 
+		(
+		< EXIT > 
+		< SEMICOLON >
+		)
+		{
+			return null;
+		}
+	)	
+}
+
+ArrayList < Query > queryList() :
+{
+	ArrayList < Query > ql = new ArrayList < Query > ();
+	Query q;
+}
+{
+	(
+		q = query() 
+		< SEMICOLON >
+		{
+			ql.add(q);
+			return ql;
+		}
+	)+
+	{
+		return ql;
+	}
+}
+
+Query query() :
+{
+	Query q = new Query();
+	CreateTableQuery cq;
+	String dq;
+	String eq;
+	SelectQuery sq;
+	InsertQuery iq;
+	DeleteQuery tq;
+}
+{
+	(
+		LOOKAHEAD(3)
+		(
+			cq = createTableQuery()
+			{
+				q.type = Query.QUERY_CREATE_TABLE;
+				q.cq = cq;
+			}
+		)
+	|
+		(
+			dq = dropTableQuery()
+			{
+				q.type = Query.QUERY_DROP_TABLE;
+				q.dq = dq;
+			}
+		)
+	|
+		(
+			eq = descQuery()
+			{
+				q.type = Query.QUERY_DESC;
+				q.eq = eq;
+			}
+		)
+	|
+		(
+			sq = selectQuery()
+			{
+				q.type = Query.QUERY_SELECT;
+				q.sq = sq;
+			}
+		)
+	|
+		(
+			iq = insertQuery()
+			{
+				q.type = Query.QUERY_INSERT;
+				q.iq = iq;
+			}
+		)
+	|
+		(
+			tq = deleteQuery()
+			{
+				q.type = Query.QUERY_DELETE;
+				q.tq = tq;
+			}
+		)
+	|
+		(
+			showTablesQuery()
+			{
+				q.type = Query.QUERY_SHOW_TABLES;
+			}
+		)
+
+	// queries for debug
+	/*
+	|
+		(
+			< SHOW >
+			< VALUES >
+		)
+		{
+			q.type = Query.QUERY_SHOW_VALUES;
+		}
+	|
+		(
+			< DROP >
+			< VALUES >	
+		)
+		{
+			q.type = Query.QUERY_DROP_VALUES;
+		}*/
+	)
+	{
+		return q;
+	}
+}
+
+CreateTableQuery createTableQuery() :
+{
+	String s;
+	ArrayList < TableElemInfo > tl;
+	CreateTableQuery ctq = new CreateTableQuery();
+}
+{
+	< CREATE > 
+	< TABLE > 
+	s = tableName() 
+	tl = tableElementList()
+	{
+		ctq.tableName = s;
+		ctq.tl = tl;
+		return ctq;
+	}
+}
+
+ArrayList < TableElemInfo > tableElementList() :
+{
+	ArrayList < TableElemInfo > tl = new ArrayList < TableElemInfo > ();
+	TableElemInfo e;
+}
+{
+	< LEFT_PAREN > 
+	e = tableElement()
+	{
+		tl.add(e);
+	}
+	(
+		< COMMA > 
+		e = tableElement()
+		{
+			tl.add(e);
+		}
+	)*
+	< RIGHT_PAREN >
+	{
+		return tl;
+	}
+}
+
+TableElemInfo tableElement() :
+{
+	TableElemInfo t;
+	ColumnInfo c;
+}
+{
+	(
+		c = columnDefinition()
+		{
+			t = new TableElemInfo();
+			t.type = TableElemInfo.ELEM_COLUMN;
+			t.ci = c;
+		}
+	| t = tableConstraintDefinition()
+	)
+	{
+		return t;
+	}
+}
+
+ColumnInfo columnDefinition() :
+{
+	ColumnInfo c;
+	String cn;
+	int dt;
+}
+{
+	cn = columnName() 
+	dt = dataType()
+	{
+		c = new ColumnInfo(cn, dt);
+	}
+	(
+	< NOT > 
+	< NULL >
+	{
+		c.notnull = true;
+	}
+	)?
+	{
+		return c;
+	}
+}
+
+TableElemInfo tableConstraintDefinition() :
+{
+	TableElemInfo ti = new TableElemInfo();
+	ArrayList < String > p;
+	ForeignKeyInfo f;
+}
+{
+	(
+		p = primaryKeyConstraint()
+		{
+			ti.type = TableElemInfo.ELEM_PRIMARY;
+			ti.pi = p;
+		}
+	| f = referentialConstraint()
+		{
+			ti.type = TableElemInfo.ELEM_FOREIGN;
+			ti.fi = f;
+		}
+	)
+	{
+		return ti;
+	}
+}
+
+ArrayList < String > primaryKeyConstraint() :
+{
+	ArrayList < String > al;
+}
+{
+	< PRIMARY > 
+	< KEY > 
+	al = columnNameList()
+	{
+		return al;
+	}
+}
+
+ForeignKeyInfo referentialConstraint() :
+{
+	ArrayList < String > al1, al2;
+	String tn;
+}
+{
+	< FOREIGN > 
+	< KEY > 
+	al1 = columnNameList() 
+	< REFERENCES > 
+	tn = tableName() 
+	al2 = columnNameList()
+	{
+		return new ForeignKeyInfo(al1, tn, al2);
+	}
+}
+
+ArrayList < String > columnNameList() :
+{
+	ArrayList < String > al = new ArrayList < String > ();
+	String s;
+}
+{
+	< LEFT_PAREN > 
+	s = columnName()
+	{
+		al.add(s);
+	}
+	(
+		< COMMA > 
+		s = columnName()
+		{
+			al.add(s);
+		}
+	)*
+	< RIGHT_PAREN >
+	{
+		return al;
+	}
+}
+
+int dataType() :
+{
+	int v;
+	Token s;
+}
+{
+	(
+		< INT >
+		{
+			return ColumnInfo.DATATYPE_INT;
+		}
+	| (
+		< CHAR > 
+		< LEFT_PAREN > 
+		s = < INT_VALUE > 
+		< RIGHT_PAREN >
+		)
+		{
+			v = Integer.parseInt(s.image);
+			if (v < 1) return ColumnInfo.DATATYPE_INVALID;
+			else return v;
+		}
+	| < DATE >
+		{
+			return ColumnInfo.DATATYPE_DATE;
+		}
+	)
+}
+
+String tableName() :
+{
+	Token s;
+}
+{
+	s = < LEGAL_IDENTIFIER >
+	{
+		return s.image.toLowerCase();
+	}
+}
+
+String columnName() :
+{
+	Token s;
+}
+{
+	s = < LEGAL_IDENTIFIER >
+	{
+		return s.image.toLowerCase();
+	}
+}
+
+String dropTableQuery() :
+{
+	String tn;
+}
+{
+	< DROP > 
+	< TABLE > 
+	tn = tableName()
+	{
+		return tn;
+	}
+}
+
+String descQuery() :
+{
+	String tn;
+}
+{
+	< DESC > 
+	tn = tableName()
+	{
+		return tn;
+	}
+}
+
+void showTablesQuery() :
 {}
 {
-  queryList()
-| (
-    < EXIT >
-    < SEMICOLON >
-    {
-      System.exit(0);
-    }
-  ) 
+	< SHOW > 
+	< TABLES >
+	{
+		return;
+	}
 }
 
-void queryList() :
+SelectQuery selectQuery() :
 {
-  int q;
+	ArrayList<NameInfo > nil;
+	SelectQuery sq;
 }
 {
-  (
-    q = query()
-    < SEMICOLON >
-    {
-      printMessage(q);
-    }
-  )+
-}
-
-int query() :
-{
-  int q;
-}
-{
-  (
-    createTableQuery()
-    {
-      q = PRINT_CREATE_TABLE;
-    }
-  )
-  (
-    {
-      return q;
-    }
-  )
+	< SELECT > 
+	nil = selectList() 
+	sq = tableExpression()
+	{
+		sq.sell = nil;
+		return sq;
+	}
 }
 
-void createTableQuery() :
-{}
+ArrayList<NameInfo > selectList() :
 {
-  < CREATE_TABLE >
-  tableName()
-  tableElementList()
+	ArrayList<NameInfo > nil = new ArrayList<NameInfo >();
+	NameInfo ni;
+}
+{
+	(
+		< WILDCARD >
+		{
+			return null;
+		}
+	|	
+		(
+			ni = selectedColumn()
+			{
+				nil.add(ni);
+			}
+			(
+				< COMMA > 
+				ni = selectedColumn()
+				{
+					nil.add(ni);
+				}
+			)*
+		)
+		{
+			return nil;
+		}
+	)
 }
 
-void tableElementList() :
-{}
+NameInfo selectedColumn() :
 {
-  < LEFT_PAREN >
-  tableElement()
-  (
-    < COMMA >
-    tableElement()
-  )*
-  < RIGHT_PAREN >
+	NameInfo ni = new NameInfo();
+	ni.tableName = null;
+	ni.alias = null;
+}
+{
+	(
+		ni.tableName = tableName() 
+		< PERIOD >
+	)?
+	ni.colName = columnName()
+	(
+		< AS > 
+		ni.alias = columnName()
+	)?
+	{
+		return ni;
+	}
 }
 
-void tableElement() :
+SelectQuery tableExpression() :
 {
+	SelectQuery sq = new SelectQuery();
+	sq.where = null;
 }
 {
-  columnDefinition()
-| tableConstraintDefinition()
-}
-
-void columnDefinition() :
-{}
-{
-  columnName()
-  dataType()
-  (
-    < NOT_NULL >
-  )?
+	sq.from = fromClause()
+	(
+		sq.where = whereClause()
+	)?
+	{
+		return sq;
+	}
 }
 
-void tableConstraintDefinition() :
-{}
+ArrayList<NameInfo> fromClause() :
 {
-  primaryKeyConstraint()
-| referentialConstraint()
+	ArrayList<NameInfo> trl;
+}
+{
+	< FROM > 
+	trl = tableReferenceList()
+	{
+		return trl;
+	}
 }
 
-void primaryKeyConstraint() :
-{}
+ArrayList<NameInfo> tableReferenceList() :
 {
-  < PRIMARY_KEY >
-  columnNameList()
+	ArrayList<NameInfo > trl = new ArrayList<NameInfo >();
+	NameInfo ni;
+}
+{
+	ni = referedTable()
+	{
+		trl.add(ni);
+	}
+	(
+		< COMMA > 
+		ni = referedTable()
+		{
+			trl.add(ni);
+		}
+	)*
+	{
+		return trl;
+	}
 }
 
-void referentialConstraint() :
-{}
+NameInfo referedTable() :
 {
-  < FOREIGN_KEY >
-  columnNameList()
-  < REFERENCES >
-  tableName()
-  columnNameList()
+	NameInfo ni = new NameInfo();
+	ni.colName = null;
+}
+{
+	ni.tableName = tableName()
+	(
+		< AS > 
+		ni.alias = tableName()
+	)?
+	{
+		return ni;
+	}
 }
 
-void columnNameList() :
-{}
+BoolExprInfo whereClause() :
 {
-  < LEFT_PAREN >
-  columnName()
-  (
-    < COMMA >
-    columnName()
-  )*
-  < RIGHT_PAREN >
+	BoolExprInfo be;
+}
+{
+	< WHERE > 
+	be = booleanValueExpression()
+	{
+		return be;
+	}
 }
 
-void dataType() :
-{}
+BoolExprInfo booleanValueExpression() :
 {
-  < INT >
-| (
-    < CHAR >
-    < LEFT_PAREN >
-    < INT_VALUE >
-    < RIGHT_PAREN >
-  )
-| < DATE >
+	BoolExprInfo ret = new BoolExprInfo(BoolExprInfo.EXPRTYPE_OR);
+	BoolExprInfo be;
+}
+{
+	be = booleanTerm()
+	{
+		ret.add(be);
+	}
+	(
+		< OR > 
+		be = booleanTerm()
+		{
+			ret.add(be);
+		}
+	)*
+	{
+		if (ret.size() <= 1)
+			return be;
+		return ret;
+	}
 }
 
-void tableName() :
-{}
+BoolExprInfo booleanTerm() :
 {
-  < LEGAL_IDENTIFIER >
+	BoolExprInfo ret = new BoolExprInfo(BoolExprInfo.EXPRTYPE_AND);
+	BoolExprInfo be;
+}
+{
+	be = booleanFactor()
+	{
+		ret.add(be);
+	}
+	(
+		< AND > 
+		be = booleanFactor()
+		{
+			ret.add(be);
+		}
+	)*
+	{
+		if (ret.size() <= 1)
+			return be;
+		return ret;
+	}
 }
 
-void columnName() :
-{}
+BoolExprInfo booleanFactor() :
 {
-  < LEGAL_IDENTIFIER >
+	boolean not = false;
+	BoolExprInfo be;
+}
+{
+	(
+	< NOT >
+	{
+		not = true;
+	}
+	)? 
+	be = booleanTest()
+	{
+		if (not)
+			be.invert();
+		return be;
+	}
+}
+
+BoolExprInfo booleanTest() :
+{
+	BoolExprInfo be;
+}
+{
+	(
+		be = predicate()
+	| 	be = parenthesizedBE()
+	)
+	{
+		return be;
+	}
+}
+
+BoolExprInfo parenthesizedBE() :
+{
+	BoolExprInfo be;
+}
+{
+	< LEFT_PAREN > 
+	be = booleanValueExpression() 
+	< RIGHT_PAREN >
+	{
+		return be;
+	}
+}
+
+BoolExprInfo predicate() :
+{
+	CompPredicateInfo cp;
+	BoolExprInfo be;
+}
+{
+	(		
+		LOOKAHEAD(4)
+		(			
+			cp = comparisonPredicate()
+			{
+				return new BoolExprInfo(cp);
+			}
+		)
+	|
+		(
+			be = nullPredicate()
+			{
+				return be;
+			}
+		)
+	)
+	
+}
+
+CompPredicateInfo comparisonPredicate() :
+{
+	Operand co1, co2;
+	Token op;
+}
+{
+	co1 = compOperand() 
+	op = < COMP_OP > 
+	co2 = compOperand()
+	{
+		return new CompPredicateInfo(co1, op.image, co2);
+	}
+}
+
+Operand compOperand() :
+{
+	CellInfo ci;
+	String tn = null, cn;
+}
+{
+	(
+		ci = comparableValue()
+		{
+			return new Operand(ci);
+		}
+	|	
+		(
+			tn = tableName() 
+			< PERIOD >
+		)?
+		cn = columnName()
+		{
+			return new Operand(tn, cn);
+		}
+	)
+}
+
+CellInfo comparableValue() :
+{
+	Token i, s, d;
+}
+{
+	(
+		i = < INT_VALUE >
+		{
+			return new CellInfo(Integer.parseInt(i.image));
+		}
+	| 	s = < CHAR_STRING >
+		{
+			return new CellInfo(s.image, false);
+		}
+	| 	d = < DATE_VALUE >
+		{
+			return new CellInfo(d.image, true);
+		}
+	)
+}
+
+BoolExprInfo nullPredicate() :
+{
+	String tn = null, cn;
+	boolean nop;
+}
+{
+	(
+		tn = tableName() 
+		< PERIOD >
+	)?
+	cn = columnName() 
+	nop = nullOperation()
+	{
+		return new BoolExprInfo(tn, cn, nop);
+	}
+}
+
+boolean nullOperation() :
+{
+	boolean r = false;
+}
+{
+	< IS > 
+	(
+	< NOT >
+		{
+			r = true;
+		}
+	)? 
+	< NULL >
+
+	{
+		return r;
+	}
+}
+
+InsertQuery insertQuery() :
+{
+	String tn;
+	InsertQuery iq;
+}
+{
+	< INSERT > 
+	< INTO > 
+	tn = tableName() 
+	iq = insertCNS()
+	{
+		iq.tableName = tn;
+		return iq;
+	}
+}
+
+InsertQuery insertCNS() :
+{
+	InsertQuery iq = new InsertQuery();
+	iq.cols = null;
+}
+{
+	(
+		iq.cols = columnNameList()
+	)?
+	iq.vals = valueList()
+	{
+		return iq;
+	}
+}
+
+ArrayList<CellInfo > valueList() :
+{
+	ArrayList<CellInfo > cil = new ArrayList<CellInfo >();
+	CellInfo ci;
+}
+{
+	< VALUES > 
+	< LEFT_PAREN > 
+	ci = value()
+	{
+		cil.add(ci);
+	}
+	(
+		< COMMA > 
+		ci = value()
+		{
+			cil.add(ci);
+		}	
+	)*
+	< RIGHT_PAREN >
+	{
+		return cil;
+	}
+}
+
+CellInfo value() :
+{
+	CellInfo ci;
+}
+{
+	(
+		< NULL >
+		{
+			return new CellInfo(null);
+		}
+	| 	ci = comparableValue()
+		{
+			return ci;
+		}
+	)
+}
+
+DeleteQuery deleteQuery() :
+{
+	DeleteQuery tq = new DeleteQuery();
+	BoolExprInfo be = null;
+}
+{
+	< DELETE > 
+	< FROM > 
+	tq.tableName = tableName()
+	(
+		be = whereClause()
+	)?
+	{
+		tq.where = be;
+		return tq;
+	}
 }
